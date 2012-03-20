@@ -1,0 +1,62 @@
+Autotest.add_hook :run_command do
+  start_image = "#{ENV['HOME']}/Documents/Growl Images/green_light.png" # Growl start image
+  system %(growlnotify -m '' -t 'Running tests' --image '#{start_image}')
+end
+
+Autotest.add_hook :ran_command do |autotest|
+  error_image     = "#{ENV['HOME']}/Documents/Growl Images/error.png" # Growl error image
+  finished_image  = "#{ENV['HOME']}/Documents/Growl Images/check.png" # Growl finished with testing image
+  failed_image    = "#{ENV['HOME']}/Documents/Growl Images/alert.png" # Growl failed tests image
+  sticky_errors   = 3     # How many error growl messages you want to stay on screen
+  error           = false # Flag for recording lines that include an error mssage
+  message         = false # Flag for adding newlines after an error title
+  error_counter   = -1    # Counter will iterate to 0 for first error
+  data            = []    # Array of error messages as strings
+  error_file      = []    # Array of error file names
+  temp_line       = []    # Temp line to grab the total tests & failed tests
+  total_tests     = ''    # Total tests ran
+  tests_failed    = ''    # Total tests failed
+  
+  lines = autotest.results.map {|s| s.gsub(/(\e.*?m|\n)/, '') }   # Remove escape sequences, map the autotest output lines to an array 
+  lines.each_with_index do |line, index|                                            # Iterate through the autotest response lines
+    error = false if line.match(/^\/.*$/)                         # Stop recording the error if the line begins with /
+    if error
+      data[error_counter] = "#{data[error_counter]} #{line.gsub(/\s+/,' ')}" # Add this line to the error index and remove multiple spaces if this line is for an error
+      if message
+        data[error_counter] << "\n\n"
+        message = false
+      end
+    end
+    if (line.match(/\d+\)/) or line.match(/(Finished in)/)) and error_counter >= 0  # Find lines that include a digit and paren: like 1) or 22), or the end of the file, and make sure the error counter isn't below 0
+        error_file[error_counter] = "#{lines[index-2].match(/\w+\.\w+:\d+:$/)}" # Go back 2 lines and pull the file name, save to previous error message
+        error_file[error_counter].gsub!(':',' ').rstrip!
+    end
+    
+    if line.match(/\d+\)/)    # Find lines that include a digit and paren: like 1) or 22)
+      message = true if error == false
+      error = true            # Start recording the error
+      error_counter += 1      # Increment the error counter
+    end
+    
+    if line.match(/\d+\s+(example)s?/)  # Check for number of passed tests
+      temp_line = line.split(' ')
+      total_tests = "#{temp_line[0]}"
+      tests_failed = "#{temp_line[2]}"
+    end
+    
+  end
+
+  if total_tests == ''
+    system %(growlnotify -m 'Check the autotest window to find details.' -t 'Syntax error' --image "#{failed_image}" -s)
+  elsif data.length == 0 # No errors found
+    system %(growlnotify -m '' -t '#{total_tests} tests passed' --image "#{finished_image}")
+  else
+    system %(growlnotify -m '' -t '#{tests_failed} / #{total_tests} tests failed' --image "#{failed_image}" -s)
+  end
+
+  data.each_with_index do |d,i|             # Count through each error
+    i < sticky_errors ? flag='-s' : flag='' # For the first few errors, flag as sticky
+    system %(growlnotify --image '#{error_image}' -m '#{d.gsub(/'/,'"')}' '#{error_file[i]}' #{flag}) # Send a growl message and remove ' from the error message
+  end
+
+end
