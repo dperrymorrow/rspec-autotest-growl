@@ -29,7 +29,13 @@ Autotest.add_hook :ran_command do |autotest|
     end
     if (line.match(/\d+\)/) or line.match(/(Finished in)/)) and error_counter >= 0  # Find lines that include a digit and paren: like 1) or 22), or the end of the file, and make sure the error counter isn't below 0
         error_file[error_counter] = "#{lines[index-2].match(/\w+\.\w+:\d+:$/)}" # Go back 2 lines and pull the file name, save to previous error message
-        error_file[error_counter].gsub!(':',' ').rstrip!
+        error = error_file[error_counter].gsub!(':',' ')
+
+        if error
+          error.rstrip!
+        else
+          error
+        end
     end
     
     if line.match(/\d+\)/)    # Find lines that include a digit and paren: like 1) or 22)
